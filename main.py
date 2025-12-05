@@ -1,6 +1,7 @@
 import pandas as pd
 import ezdxf
 from pathlib import Path
+import re
 
 
 CSV_PATH = "diagrams.csv"   # adjust if needed
@@ -12,17 +13,27 @@ X_MAX = 15000
 TEXT_HEIGHT = 250
 TITLE_HEIGHT = 500
 
+LEFT_LABEL_EXTRA_OFFSET = 2000  # how much further left to place left labels
+
+# Layer names
+LAYER_BASE_VARIANTS = "BASE_VARIANTS"
+LAYER_OFFSET_VARIANTS = "OFFSET_VARIANTS"   # for / +0,70, / +0,50, / +whatever
+LAYER_CENTERLINE = "CENTERLINE"
+LAYER_ANNOTATIONS = "ANNOTATIONS"           # all text (labels + title)
+
 
 def normalize_base(leg_type: str) -> str:
     """
-    Turn e.g. '- 3 / +0,70' or '+ 6/+0,70' or ' - 4 (-3,80)' into
-    a canonical base like '-3', '6', etc.
+    From a full leg type string like:
+        '- 3 / +0,70', '+ 6 / +0,70', ' - 4 (-3,80)', 'N / +0,70'
+    get the canonical base string:
+        '-3', '6', '-4', 'N'
     """
     s = leg_type.strip()
-    # Cut off anything after '/' or '('
+    # Cut off anything after '/' or '(' -> keep only the base part
     for sep in ("/", "("):
         if sep in s:
-            s = s.split(sep)[0].strip()
+            s = s.split(sep, 1)[0].strip()
     # Remove all spaces
     s = s.replace(" ", "")
     # Make '+1' the same as '1'
@@ -31,51 +42,100 @@ def normalize_base(leg_type: str) -> str:
     return s
 
 
+def parse_offset_value(leg_type: str):
+    """
+    Find the numeric part after the '/', e.g. for:
+        '-1 / +0,70'   -> 0.70
+        'N / +0.50'    -> 0.50
+        '+6/+0,70'     -> 0.70
+    Returns float or None if no offset is present.
+    """
+    if "/" not in leg_type:
+        return None
+
+    # Part after the first slash
+    part = leg_type.split("/", 1)[1]
+
+    # Remove anything in parentheses (e.g. ' (+3,80)')
+    part = part.split("(", 1)[0]
+
+    # Regex: first signed number with optional decimal part
+    m = re.search(r"[+-]?\d+(?:[.,]\d+)?", part)
+    if not m:
+        return None
+
+    num_str = m.group(0).replace(",", ".")
+    try:
+        return float(num_str)
+    except ValueError:
+        return None
+
+
 def compute_y_maps(df_for_tower: pd.DataFrame):
     """
     For a given tower (subset of the dataframe), compute:
-      - base_order: list of base leg types in the order they appear
-      - y_base_map: mapping base -> y coordinate for the 'main' variant
+      - base_order: list of base leg types in the order encountered
+      - y_base_map: mapping base -> y coordinate for the base variant
       - y_variant_map: mapping full Leg Type string -> y coordinate
+
     Pattern:
-        - N at y=0
-        - one 'step' = 1000 units
-        - any variant with '0,70' is y_base - 700
+        Base:
+          - base 'N' -> y = 0
+          - base integer k -> y = -1000 * k
+        Offset:
+          - if we have '/ +x' -> y = y_base - x * 1000
     """
-    # Determine base order in this tower, preserving CSV order
     unique_leg_types = df_for_tower["Leg Type"].unique()
+
     base_order = []
-    seen_bases = set()
-    for lt in unique_leg_types:
-        b = normalize_base(lt)
-        if b not in seen_bases:
-            seen_bases.add(b)
-            base_order.append(b)
-
-    if "N" not in base_order:
-        raise ValueError("Expected a base 'N' level in this tower, but didn't find one.")
-
-    idx_N = base_order.index("N")
-
-    # Map base -> y_base
     y_base_map = {}
-    for i, base in enumerate(base_order):
-        # One 'step' = 1000 units; N at 0
-        y_base_map[base] = (idx_N - i) * 1000
-
-    # Now map each full Leg Type (including /+0,70) to its y position
     y_variant_map = {}
+
     for lt in unique_leg_types:
         base = normalize_base(lt)
-        y_base = y_base_map[base]
-        # If this is a +0,70 variant, shift down by 700
-        if "0,70" in lt:
-            y = y_base - 700
+
+        # Determine (and remember) the base y
+        if base not in y_base_map:
+            if base == "N":
+                y_base = 0
+            else:
+                # If the base is numeric, map k -> -1000 * k
+                try:
+                    k = int(base)
+                except ValueError:
+                    # Fallback if something weird appears: treat as 0
+                    k = 0
+                y_base = -1000 * k
+            y_base_map[base] = y_base
+            base_order.append(base)
+        else:
+            y_base = y_base_map[base]
+
+        # Offset handling: / +x -> y = y_base - x * 1000
+        offset = parse_offset_value(lt)
+        if offset is not None:
+            y = y_base - round(offset * 1000)
         else:
             y = y_base
+
         y_variant_map[lt] = y
 
+    if "N" not in y_base_map:
+        raise ValueError("Expected a base 'N' level in this tower, but didn't find one.")
+
     return base_order, y_base_map, y_variant_map
+
+
+def ensure_layers(doc):
+    """Create layers if they don't exist yet."""
+    if LAYER_BASE_VARIANTS not in doc.layers:
+        doc.layers.new(name=LAYER_BASE_VARIANTS, dxfattribs={"color": 7})  # white
+    if LAYER_OFFSET_VARIANTS not in doc.layers:
+        doc.layers.new(name=LAYER_OFFSET_VARIANTS, dxfattribs={"color": 1})  # red
+    if LAYER_CENTERLINE not in doc.layers:
+        doc.layers.new(name=LAYER_CENTERLINE, dxfattribs={"color": 3})  # green
+    if LAYER_ANNOTATIONS not in doc.layers:
+        doc.layers.new(name=LAYER_ANNOTATIONS, dxfattribs={"color": 2})  # yellow-ish
 
 
 def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
@@ -83,9 +143,11 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
     Draws:
       - one horizontal line for each unique Leg Type (variant),
         from X_MIN to X_MAX at its y position.
-      - labels (variant name) at both ends of each line.
-      - a title with the tower type above the topmost line.
+      - labels (variant name) at both ends of each line (on ANNOTATIONS layer).
+      - a dashed vertical centerline.
+      - a title with the tower type above the topmost line (also on ANNOTATIONS layer).
     """
+    ensure_layers(doc)
     msp = doc.modelspace()
 
     _, _, y_variant_map = compute_y_maps(df_for_tower)
@@ -94,27 +156,68 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
     if not all_y:
         return  # nothing to draw
 
+    y_max = max(all_y)
+    y_min = min(all_y)
+
     # Draw one line per variant
     for leg_type, y in y_variant_map.items():
-        # Horizontal line
-        msp.add_line((X_MIN, y), (X_MAX, y))
-
         label = str(leg_type).strip()
 
-        # Label at the beginning (slightly above the line)
-        t1 = msp.add_text(label, dxfattribs={"height": TEXT_HEIGHT})
-        t1.dxf.insert = (X_MIN, y + TEXT_HEIGHT)  # NO set_pos!
+        # Decide if this variant is an offset variant (has an offset value)
+        offset_value = parse_offset_value(leg_type)
+        is_offset_variant = offset_value is not None
+        layer_name = LAYER_OFFSET_VARIANTS if is_offset_variant else LAYER_BASE_VARIANTS
 
-        # Label at the end (slightly above the line)
-        t2 = msp.add_text(label, dxfattribs={"height": TEXT_HEIGHT})
+        # Horizontal line (on base/offset layer)
+        msp.add_line(
+            (X_MIN, y),
+            (X_MAX, y),
+            dxfattribs={"layer": layer_name},
+        )
+
+        # Left label: placed further to the left than the line, on ANNOTATIONS layer
+        left_x = X_MIN - LEFT_LABEL_EXTRA_OFFSET
+        t1 = msp.add_text(
+            label,
+            dxfattribs={
+                "height": TEXT_HEIGHT,
+                "layer": LAYER_ANNOTATIONS,
+            },
+        )
+        t1.dxf.insert = (left_x, y + TEXT_HEIGHT)  # NO set_pos!
+
+        # Right label: at the right end of the line, slightly above, on ANNOTATIONS layer
+        t2 = msp.add_text(
+            label,
+            dxfattribs={
+                "height": TEXT_HEIGHT,
+                "layer": LAYER_ANNOTATIONS,
+            },
+        )
         t2.dxf.insert = (X_MAX, y + TEXT_HEIGHT)  # NO set_pos!
 
-    # Title somewhere up top
-    max_y = max(all_y)
-    title_y = max_y + 2_000  # some margin above the highest line
+    # Dashed vertical centerline at x=0 (on CENTERLINE layer)
+    centerline_top = y_max + 1000
+    centerline_bottom = y_min - 1000
+    msp.add_line(
+        (0, centerline_bottom),
+        (0, centerline_top),
+        dxfattribs={
+            "layer": LAYER_CENTERLINE,
+            "linetype": "CENTER",  # relies on ezdxf.new(setup=True)
+        },
+    )
 
+    # Title somewhere up top (above the highest line), on ANNOTATIONS layer
+    title_y = y_max + 2000  # some margin above the highest line
     title = f"Tower Type {tower_name}"
-    title_text = msp.add_text(title, dxfattribs={"height": TITLE_HEIGHT})
+    title_text = msp.add_text(
+        title,
+        dxfattribs={
+            "height": TITLE_HEIGHT,
+            "layer": LAYER_ANNOTATIONS,
+        },
+    )
     # Center-ish above the lines
     title_text.dxf.insert = (0, title_y)
 
