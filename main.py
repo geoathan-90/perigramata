@@ -20,6 +20,7 @@ LAYER_BASE_VARIANTS = "BASE_VARIANTS"
 LAYER_OFFSET_VARIANTS = "OFFSET_VARIANTS"   # for / +0,70, / +0,50, / +whatever
 LAYER_CENTERLINE = "CENTERLINE"
 LAYER_ANNOTATIONS = "ANNOTATIONS"           # all text (labels + title)
+LAYER_ANGLED_LINES = "ANGLED_LINES"         # new: the two diagonal lines
 
 
 def normalize_base(leg_type: str) -> str:
@@ -67,6 +68,20 @@ def parse_offset_value(leg_type: str):
     num_str = m.group(0).replace(",", ".")
     try:
         return float(num_str)
+    except ValueError:
+        return None
+
+
+def parse_distance(val):
+    """
+    Parse 'distance on the ground' cell to float.
+    Handles integers or decimals with comma or dot.
+    """
+    if pd.isna(val):
+        return None
+    s = str(val).strip().replace(",", ".")
+    try:
+        return float(s)
     except ValueError:
         return None
 
@@ -136,6 +151,8 @@ def ensure_layers(doc):
         doc.layers.new(name=LAYER_CENTERLINE, dxfattribs={"color": 3})  # green
     if LAYER_ANNOTATIONS not in doc.layers:
         doc.layers.new(name=LAYER_ANNOTATIONS, dxfattribs={"color": 2})  # yellow-ish
+    if LAYER_ANGLED_LINES not in doc.layers:
+        doc.layers.new(name=LAYER_ANGLED_LINES, dxfattribs={"color": 4})  # cyan-ish
 
 
 def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
@@ -145,7 +162,8 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
         from X_MIN to X_MAX at its y position.
       - labels (variant name) at both ends of each line (on ANNOTATIONS layer).
       - a dashed vertical centerline.
-      - a title with the tower type above the topmost line (also on ANNOTATIONS layer).
+      - two angled lines based on 'distance on the ground'.
+      - a title with the tower type above the topmost line (on ANNOTATIONS layer).
     """
     ensure_layers(doc)
     msp = doc.modelspace()
@@ -196,6 +214,48 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
         )
         t2.dxf.insert = (X_MAX, y + TEXT_HEIGHT)  # NO set_pos!
 
+    # ---------- Angled lines based on "distance on the ground" ----------
+
+    # Find leg types for lowest and highest horizontal lines
+    lowest_leg_type = min(y_variant_map, key=lambda lt: y_variant_map[lt])
+    highest_leg_type = max(y_variant_map, key=lambda lt: y_variant_map[lt])
+
+    y_low = y_variant_map[lowest_leg_type]
+    y_high = y_variant_map[highest_leg_type]
+
+    # Get their corresponding 'distance on the ground' values
+    col_dist = "distance on the ground"  # column name as in your CSV
+
+    # Lowest
+    df_low = df_for_tower[df_for_tower["Leg Type"] == lowest_leg_type]
+    x_low = None
+    if not df_low.empty and col_dist in df_low.columns:
+        x_low = parse_distance(df_low.iloc[0][col_dist])
+
+    # Highest
+    df_high = df_for_tower[df_for_tower["Leg Type"] == highest_leg_type]
+    x_high = None
+    if not df_high.empty and col_dist in df_high.columns:
+        x_high = parse_distance(df_high.iloc[0][col_dist])
+
+    if x_low is not None and x_high is not None:
+        # Positive side angled line: from lowest to highest
+        # Example you gave: (8998, -6700) to (7616, 4000)
+        msp.add_line(
+            (x_low, y_low),
+            (x_high, y_high),
+            dxfattribs={"layer": LAYER_ANGLED_LINES},
+        )
+
+        # Negative side: mirrored around the centerline (x -> -x)
+        msp.add_line(
+            (-x_low, y_low),
+            (-x_high, y_high),
+            dxfattribs={"layer": LAYER_ANGLED_LINES},
+        )
+
+    # ---------- Centerline ----------
+
     # Dashed vertical centerline at x=0 (on CENTERLINE layer)
     centerline_top = y_max + 1000
     centerline_bottom = y_min - 1000
@@ -207,6 +267,8 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
             "linetype": "CENTER",  # relies on ezdxf.new(setup=True)
         },
     )
+
+    # ---------- Title ----------
 
     # Title somewhere up top (above the highest line), on ANNOTATIONS layer
     title_y = y_max + 2000  # some margin above the highest line

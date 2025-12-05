@@ -493,7 +493,7 @@ $SKPOLY
   9
 $TDCREATE
  40
-2461015.4505208335
+2461015.4709143518
   9
 $TDUCREATE
  40
@@ -501,7 +501,7 @@ $TDUCREATE
   9
 $TDUPDATE
  40
-2461015.4505208335
+2461015.4709143518
   9
 $TDUUPDATE
  40
@@ -553,7 +553,7 @@ $SPLINESEGS
   9
 $HANDSEED
   5
-B1
+B4
   9
 $SURFTAB1
  70
@@ -933,11 +933,11 @@ $PSTYLEMODE
   9
 $FINGERPRINTGUID
   2
-{B8C4A7CB-1171-4A0C-AA94-A5C7FD62D20D}
+{4CA8F3D9-52D8-4E2B-883B-F19610047EE4}
   9
 $VERSIONGUID
   2
-{57BC4805-6274-404F-A8F3-41AB00A9974B}
+{E18F8E46-E8B0-469A-8729-5E909AE63872}
   9
 $EXTNAMES
 290
@@ -1327,9 +1327,9 @@ ISM
   0
 CLASS
   1
-ACDBPLACEHOLDER
+LAYOUT
   2
-AcDbPlaceHolder
+AcDbLayout
   3
 ObjectDBX Classes
  90
@@ -1343,9 +1343,9 @@ ObjectDBX Classes
   0
 CLASS
   1
-LAYOUT
+ACDBPLACEHOLDER
   2
-AcDbLayout
+AcDbPlaceHolder
   3
 ObjectDBX Classes
  90
@@ -2237,7 +2237,7 @@ LAYER
 100
 AcDbSymbolTable
  70
-6
+7
   0
 LAYER
   5
@@ -2376,6 +2376,30 @@ ANNOTATIONS
 0
  62
 2
+  6
+Continuous
+370
+-3
+390
+13
+347
+21
+  0
+LAYER
+  5
+8E
+330
+1
+100
+AcDbSymbolTableRecord
+100
+AcDbLayerTableRecord
+  2
+ANGLED_LINES
+ 70
+0
+ 62
+4
   6
 Continuous
 370
@@ -3185,7 +3209,7 @@ ACAD
   0
 APPID
   5
-AE
+B1
 330
 3
 100
@@ -3199,7 +3223,7 @@ HATCHBACKGROUNDCOLOR
   0
 APPID
   5
-AF
+B2
 330
 3
 100
@@ -5311,7 +5335,7 @@ ENTITIES
   0
 LINE
   5
-8E
+8F
 330
 17
 100
@@ -5332,30 +5356,6 @@ AcDbLine
 2000.0
  31
 0.0
-  0
-TEXT
-  5
-8F
-330
-17
-100
-AcDbEntity
-  8
-ANNOTATIONS
-100
-AcDbText
- 10
--17000.0
- 20
-2250.0
- 30
-0.0
- 40
-250.0
-  1
--2
-100
-AcDbText
   0
 TEXT
   5
@@ -5369,6 +5369,30 @@ ANNOTATIONS
 100
 AcDbText
  10
+-17000.0
+ 20
+2250.0
+ 30
+0.0
+ 40
+250.0
+  1
+-2
+100
+AcDbText
+  0
+TEXT
+  5
+91
+330
+17
+100
+AcDbEntity
+  8
+ANNOTATIONS
+100
+AcDbText
+ 10
 15000.0
  20
 2250.0
@@ -5383,7 +5407,7 @@ AcDbText
   0
 LINE
   5
-91
+92
 330
 17
 100
@@ -5404,30 +5428,6 @@ AcDbLine
 1300.0
  31
 0.0
-  0
-TEXT
-  5
-92
-330
-17
-100
-AcDbEntity
-  8
-ANNOTATIONS
-100
-AcDbText
- 10
--17000.0
- 20
-1550.0
- 30
-0.0
- 40
-250.0
-  1
-- 2 / +0,70
-100
-AcDbText
   0
 TEXT
   5
@@ -5441,6 +5441,30 @@ ANNOTATIONS
 100
 AcDbText
  10
+-17000.0
+ 20
+1550.0
+ 30
+0.0
+ 40
+250.0
+  1
+- 2 / +0,70
+100
+AcDbText
+  0
+TEXT
+  5
+94
+330
+17
+100
+AcDbEntity
+  8
+ANNOTATIONS
+100
+AcDbText
+ 10
 15000.0
  20
 1550.0
@@ -5455,7 +5479,7 @@ AcDbText
   0
 LINE
   5
-94
+95
 330
 17
 100
@@ -5476,30 +5500,6 @@ AcDbLine
 0.0
  31
 0.0
-  0
-TEXT
-  5
-95
-330
-17
-100
-AcDbEntity
-  8
-ANNOTATIONS
-100
-AcDbText
- 10
--17000.0
- 20
-250.0
- 30
-0.0
- 40
-250.0
-  1
-N
-100
-AcDbText
   0
 TEXT
   5
@@ -5513,6 +5513,30 @@ ANNOTATIONS
 100
 AcDbText
  10
+-17000.0
+ 20
+250.0
+ 30
+0.0
+ 40
+250.0
+  1
+N
+100
+AcDbText
+  0
+TEXT
+  5
+97
+330
+17
+100
+AcDbEntity
+  8
+ANNOTATIONS
+100
+AcDbText
+ 10
 15000.0
  20
 250.0
@@ -5527,7 +5551,7 @@ AcDbText
   0
 LINE
   5
-97
+98
 330
 17
 100
@@ -5548,30 +5572,6 @@ AcDbLine
 -700.0
  31
 0.0
-  0
-TEXT
-  5
-98
-330
-17
-100
-AcDbEntity
-  8
-ANNOTATIONS
-100
-AcDbText
- 10
--17000.0
- 20
--450.0
- 30
-0.0
- 40
-250.0
-  1
-N / +0,70
-100
-AcDbText
   0
 TEXT
   5
@@ -5585,6 +5585,30 @@ ANNOTATIONS
 100
 AcDbText
  10
+-17000.0
+ 20
+-450.0
+ 30
+0.0
+ 40
+250.0
+  1
+N / +0,70
+100
+AcDbText
+  0
+TEXT
+  5
+9A
+330
+17
+100
+AcDbEntity
+  8
+ANNOTATIONS
+100
+AcDbText
+ 10
 15000.0
  20
 -450.0
@@ -5599,7 +5623,7 @@ AcDbText
   0
 LINE
   5
-9A
+9B
 330
 17
 100
@@ -5620,30 +5644,6 @@ AcDbLine
 -2000.0
  31
 0.0
-  0
-TEXT
-  5
-9B
-330
-17
-100
-AcDbEntity
-  8
-ANNOTATIONS
-100
-AcDbText
- 10
--17000.0
- 20
--1750.0
- 30
-0.0
- 40
-250.0
-  1
-+2
-100
-AcDbText
   0
 TEXT
   5
@@ -5657,6 +5657,30 @@ ANNOTATIONS
 100
 AcDbText
  10
+-17000.0
+ 20
+-1750.0
+ 30
+0.0
+ 40
+250.0
+  1
+2
+100
+AcDbText
+  0
+TEXT
+  5
+9D
+330
+17
+100
+AcDbEntity
+  8
+ANNOTATIONS
+100
+AcDbText
+ 10
 15000.0
  20
 -1750.0
@@ -5665,13 +5689,13 @@ AcDbText
  40
 250.0
   1
-+2
+2
 100
 AcDbText
   0
 LINE
   5
-9D
+9E
 330
 17
 100
@@ -5692,30 +5716,6 @@ AcDbLine
 -2700.0
  31
 0.0
-  0
-TEXT
-  5
-9E
-330
-17
-100
-AcDbEntity
-  8
-ANNOTATIONS
-100
-AcDbText
- 10
--17000.0
- 20
--2450.0
- 30
-0.0
- 40
-250.0
-  1
-+2 / +0,70
-100
-AcDbText
   0
 TEXT
   5
@@ -5729,6 +5729,30 @@ ANNOTATIONS
 100
 AcDbText
  10
+-17000.0
+ 20
+-2450.0
+ 30
+0.0
+ 40
+250.0
+  1
++2 / +0,70
+100
+AcDbText
+  0
+TEXT
+  5
+A0
+330
+17
+100
+AcDbEntity
+  8
+ANNOTATIONS
+100
+AcDbText
+ 10
 15000.0
  20
 -2450.0
@@ -5743,7 +5767,7 @@ AcDbText
   0
 LINE
   5
-A0
+A1
 330
 17
 100
@@ -5764,30 +5788,6 @@ AcDbLine
 -4000.0
  31
 0.0
-  0
-TEXT
-  5
-A1
-330
-17
-100
-AcDbEntity
-  8
-ANNOTATIONS
-100
-AcDbText
- 10
--17000.0
- 20
--3750.0
- 30
-0.0
- 40
-250.0
-  1
-+4
-100
-AcDbText
   0
 TEXT
   5
@@ -5801,6 +5801,30 @@ ANNOTATIONS
 100
 AcDbText
  10
+-17000.0
+ 20
+-3750.0
+ 30
+0.0
+ 40
+250.0
+  1
+4
+100
+AcDbText
+  0
+TEXT
+  5
+A3
+330
+17
+100
+AcDbEntity
+  8
+ANNOTATIONS
+100
+AcDbText
+ 10
 15000.0
  20
 -3750.0
@@ -5809,13 +5833,13 @@ AcDbText
  40
 250.0
   1
-+4
+4
 100
 AcDbText
   0
 LINE
   5
-A3
+A4
 330
 17
 100
@@ -5839,7 +5863,7 @@ AcDbLine
   0
 TEXT
   5
-A4
+A5
 330
 17
 100
@@ -5863,7 +5887,7 @@ AcDbText
   0
 TEXT
   5
-A5
+A6
 330
 17
 100
@@ -5887,7 +5911,7 @@ AcDbText
   0
 LINE
   5
-A6
+A7
 330
 17
 100
@@ -5911,7 +5935,7 @@ AcDbLine
   0
 TEXT
   5
-A7
+A8
 330
 17
 100
@@ -5929,13 +5953,13 @@ AcDbText
  40
 250.0
   1
-+6
+6
 100
 AcDbText
   0
 TEXT
   5
-A8
+A9
 330
 17
 100
@@ -5953,13 +5977,13 @@ AcDbText
  40
 250.0
   1
-+6
+6
 100
 AcDbText
   0
 LINE
   5
-A9
+AA
 330
 17
 100
@@ -5983,7 +6007,7 @@ AcDbLine
   0
 TEXT
   5
-AA
+AB
 330
 17
 100
@@ -6007,7 +6031,7 @@ AcDbText
   0
 TEXT
   5
-AB
+AC
 330
 17
 100
@@ -6031,7 +6055,55 @@ AcDbText
   0
 LINE
   5
-AC
+AD
+330
+17
+100
+AcDbEntity
+  8
+ANGLED_LINES
+100
+AcDbLine
+ 10
+13392.0
+ 20
+-6700.0
+ 30
+0.0
+ 11
+11646.0
+ 21
+2000.0
+ 31
+0.0
+  0
+LINE
+  5
+AE
+330
+17
+100
+AcDbEntity
+  8
+ANGLED_LINES
+100
+AcDbLine
+ 10
+-13392.0
+ 20
+-6700.0
+ 30
+0.0
+ 11
+-11646.0
+ 21
+2000.0
+ 31
+0.0
+  0
+LINE
+  5
+AF
 330
 17
 100
@@ -6057,7 +6129,7 @@ AcDbLine
   0
 TEXT
   5
-AD
+B0
 330
 17
 100
@@ -7169,7 +7241,7 @@ CREATED_BY_EZDXF
   3
 WRITTEN_BY_EZDXF
 350
-B0
+B3
   0
 DICTIONARYVAR
   5
@@ -7181,7 +7253,7 @@ DictionaryVariables
 280
 0
   1
-1.4.3 @ 2025-12-05T10:48:45.285947+00:00
+1.4.3 @ 2025-12-05T11:18:07.534719+00:00
   0
 VISUALSTYLE
   5
@@ -13735,7 +13807,7 @@ strokes_ogs.tif
   0
 DICTIONARYVAR
   5
-B0
+B3
 330
 2D
 100
@@ -13743,7 +13815,7 @@ DictionaryVariables
 280
 0
   1
-1.4.3 @ 2025-12-05T10:48:45.314995+00:00
+1.4.3 @ 2025-12-05T11:18:07.540696+00:00
   0
 ENDSEC
   0
