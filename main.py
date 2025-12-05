@@ -1,187 +1,151 @@
-import math
 import pandas as pd
 import ezdxf
+from pathlib import Path
 
 
-def create_tower_skeleton_dxf(
-    csv_path: str,
-    tower_type: str,
-    dxf_out: str,
-    scale: float = 1000.0,
-) -> None:
+CSV_PATH = "diagrams.csv"   # adjust if needed
+OUT_DIR = "tower_dxf"       # output folder for DXF files
+
+X_MIN = -15000
+X_MAX = 15000
+
+TEXT_HEIGHT = 250
+TITLE_HEIGHT = 500
+
+
+def normalize_base(leg_type: str) -> str:
     """
-    Create a 'skeleton' DXF for a given tower type (e.g. 'G5+8') based on diagrams.csv.
-
-    Geometry conventions (similar to your R5+8 skeleton, but slightly simplified):
-
-    - All lengths from the CSV are interpreted in meters and multiplied by `scale`
-      to get DXF drawing units (default scale=1000 → mm).
-    - The tower has 4 legs, lying on the 4 diagonals at angles:
-        45°, 135°, 225°, 315° (counter-clockwise from +X).
-    - For each leg type row in the CSV (for that tower type), we draw a leg segment
-      on each diagonal, starting at the tower base “corner” and ending at
-      radius = `distance on the ground`.
-    - We also draw:
-        * Outer tower base square (using square half-diagonal)
-        * Inner 'styliskos' square (using styliskos half-diagonal)
-        * Two reference axes (X and Y)
+    Turn e.g. '- 3 / +0,70' or '+ 6/+0,70' or ' - 4 (-3,80)' into
+    a canonical base like '-3', '6', etc.
     """
-    # ----------------------------------------------------------------------
-    # 1. Load and filter CSV
-    # ----------------------------------------------------------------------
-    
-    #csv_path="diagrams.csv"
-    
-    df = pd.read_csv(csv_path)
-    df_tower = df[df["Tower Type"] == tower_type].copy()
+    s = leg_type.strip()
+    # Cut off anything after '/' or '('
+    for sep in ("/", "("):
+        if sep in s:
+            s = s.split(sep)[0].strip()
+    # Remove all spaces
+    s = s.replace(" ", "")
+    # Make '+1' the same as '1'
+    if s.startswith("+"):
+        s = s[1:]
+    return s
 
-    if df_tower.empty:
-        raise ValueError(f"No rows found for Tower Type = {tower_type!r}")
 
-    # We'll assume these are constant within a given tower type:
-    row0 = df_tower.iloc[0]
-    square_side_m = float(row0["Square Side"])
-    square_half_diag_m = float(row0["square half-diagonal"])
-    styliskos_half_diag_m = float(row0["styliskos half-diagonal"])
+def compute_y_maps(df_for_tower: pd.DataFrame):
+    """
+    For a given tower (subset of the dataframe), compute:
+      - base_order: list of base leg types in the order they appear
+      - y_base_map: mapping base -> y coordinate for the 'main' variant
+      - y_variant_map: mapping full Leg Type string -> y coordinate
+    Pattern:
+        - N at y=0
+        - one 'step' = 1000 units
+        - any variant with '0,70' is y_base - 700
+    """
+    # Determine base order in this tower, preserving CSV order
+    unique_leg_types = df_for_tower["Leg Type"].unique()
+    base_order = []
+    seen_bases = set()
+    for lt in unique_leg_types:
+        b = normalize_base(lt)
+        if b not in seen_bases:
+            seen_bases.add(b)
+            base_order.append(b)
 
-    # Convert to drawing units (e.g. mm)
-    square_side = square_side_m * scale
-    square_half_diag = square_half_diag_m * scale
-    styliskos_half_diag = styliskos_half_diag_m * scale
+    if "N" not in base_order:
+        raise ValueError("Expected a base 'N' level in this tower, but didn't find one.")
 
-    # ----------------------------------------------------------------------
-    # 2. Create DXF document & layers
-    # ----------------------------------------------------------------------
-    doc = ezdxf.new("R2010")
-    doc.layers.new(name="axes", dxfattribs={"color": 8})
-    doc.layers.new(name="tower", dxfattribs={"color": 7})
-    doc.layers.new(name="styliskos", dxfattribs={"color": 3})
-    doc.layers.new(name="legs", dxfattribs={"color": 1})
-    doc.layers.new(name="leg_labels", dxfattribs={"color": 2})
+    idx_N = base_order.index("N")
 
+    # Map base -> y_base
+    y_base_map = {}
+    for i, base in enumerate(base_order):
+        # One 'step' = 1000 units; N at 0
+        y_base_map[base] = (idx_N - i) * 1000
+
+    # Now map each full Leg Type (including /+0,70) to its y position
+    y_variant_map = {}
+    for lt in unique_leg_types:
+        base = normalize_base(lt)
+        y_base = y_base_map[base]
+        # If this is a +0,70 variant, shift down by 700
+        if "0,70" in lt:
+            y = y_base - 700
+        else:
+            y = y_base
+        y_variant_map[lt] = y
+
+    return base_order, y_base_map, y_variant_map
+
+
+def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
+    """
+    Draws:
+      - one horizontal line for each unique Leg Type (variant),
+        from X_MIN to X_MAX at its y position.
+      - labels (variant name) at both ends of each line.
+      - a title with the tower type above the topmost line.
+    """
     msp = doc.modelspace()
 
-    # ----------------------------------------------------------------------
-    # 3. Draw reference axes
-    # ----------------------------------------------------------------------
-    axis_len = square_half_diag * 12  # arbitrary nice big length
-    msp.add_line((-axis_len, 0), (axis_len, 0), dxfattribs={"layer": "axes"})
-    msp.add_line((0, -axis_len), (0, axis_len), dxfattribs={"layer": "axes"})
+    _, _, y_variant_map = compute_y_maps(df_for_tower)
 
-    # ----------------------------------------------------------------------
-    # 4. Draw tower base square
-    #
-    # The square is centered at (0,0), not rotated, with side: square_side.
-    # This ensures the distance from center to each corner equals
-    # the 'square half-diagonal' from the CSV.
-    # ----------------------------------------------------------------------
-    half_side = square_side / 2.0
-    tower_pts = [
-        (half_side, half_side),
-        (-half_side, half_side),
-        (-half_side, -half_side),
-        (half_side, -half_side),
-    ]
-    # Close the loop:
-    tower_pts.append(tower_pts[0])
+    all_y = list(y_variant_map.values())
+    if not all_y:
+        return  # nothing to draw
 
-    for p1, p2 in zip(tower_pts, tower_pts[1:]):
-        msp.add_line(p1, p2, dxfattribs={"layer": "tower"})
+    # Draw one line per variant
+    for leg_type, y in y_variant_map.items():
+        # Horizontal line
+        msp.add_line((X_MIN, y), (X_MAX, y))
 
-    # ----------------------------------------------------------------------
-    # 5. Draw styliskos (inner square)
-    #
-    # Here we match your R5+8 logic more closely: we use the half-diagonal
-    # and place the 4 corners on the diagonals:
-    #   angles = 45°, 135°, 225°, 315°
-    # ----------------------------------------------------------------------
-    styl_angles_deg = [45, 135, 225, 315]
-    styl_pts = []
-    for ang_deg in styl_angles_deg:
-        ang = math.radians(ang_deg)
-        x = styliskos_half_diag * math.cos(ang)
-        y = styliskos_half_diag * math.sin(ang)
-        styl_pts.append((x, y))
-    styl_pts.append(styl_pts[0])
+        label = str(leg_type).strip()
 
-    for p1, p2 in zip(styl_pts, styl_pts[1:]):
-        msp.add_line(p1, p2, dxfattribs={"layer": "styliskos"})
+        # Label at the beginning (slightly above the line)
+        t1 = msp.add_text(label, dxfattribs={"height": TEXT_HEIGHT})
+        t1.dxf.insert = (X_MIN, y + TEXT_HEIGHT)  # NO set_pos!
 
-    # ----------------------------------------------------------------------
-    # 6. Draw all leg positions for this tower type
-    #
-    # We use four diagonals, same as the styliskos corners:
-    #   45°, 135°, 225°, 315°
-    # For each leg type (row in df_tower), we:
-    #   - read 'distance on the ground'
-    #   - draw 4 leg segments (one on each diagonal), starting at the
-    #     tower-corner radius and ending at the leg-foot radius.
-    #
-    # Tower corner radius (from center to corner) is square_half_diag,
-    # which must equal square_side / sqrt(2). We use the CSV value directly.
-    # ----------------------------------------------------------------------
-    leg_angles_deg = [45, 135, 225, 315]
-    tower_corner_radius = square_half_diag
+        # Label at the end (slightly above the line)
+        t2 = msp.add_text(label, dxfattribs={"height": TEXT_HEIGHT})
+        t2.dxf.insert = (X_MAX, y + TEXT_HEIGHT)  # NO set_pos!
 
-    # We'll also place labels out to the right side (for leg types)
-    # so you can see the legend of which leg types are present.
-    label_x = tower_corner_radius + (square_side * 4.0)
-    label_y_step = square_side * 0.7
-    label_y_start = square_side * 4.0
+    # Title somewhere up top
+    max_y = max(all_y)
+    title_y = max_y + 2_000  # some margin above the highest line
 
-    for i, (_, row) in enumerate(df_tower.iterrows()):
-        leg_type = str(row["Leg Type"])
-        dist_ground_m = float(row["distance on the ground"])
-        leg_radius = dist_ground_m * scale
+    title = f"Tower Type {tower_name}"
+    title_text = msp.add_text(title, dxfattribs={"height": TITLE_HEIGHT})
+    # Center-ish above the lines
+    title_text.dxf.insert = (0, title_y)
 
-        # Draw 4 leg segments
-        for ang_deg in leg_angles_deg:
-            ang = math.radians(ang_deg)
-            # Start at tower corner radius along this diagonal
-            x0 = tower_corner_radius * math.cos(ang)
-            y0 = tower_corner_radius * math.sin(ang)
-            # End at leg radius
-            x1 = leg_radius * math.cos(ang)
-            y1 = leg_radius * math.sin(ang)
 
-            msp.add_line(
-                (x0, y0),
-                (x1, y1),
-                dxfattribs={"layer": "legs"},
-            )
+def main():
+    df = pd.read_csv(CSV_PATH)
 
-        # Add a label for this leg type on the right, stacked vertically
-        y_label = label_y_start - i * label_y_step
-        msp.add_text(
-            f"{leg_type}  ({dist_ground_m:.3f} m)",
-            dxfattribs={
-                "height": square_side * 0.15,
-                "layer": "leg_labels",
-            },
-        ).set_pos((label_x, y_label))
+    out_dir = Path(OUT_DIR)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    # ----------------------------------------------------------------------
-    # 7. Add a title
-    # ----------------------------------------------------------------------
-    title_text = f"Σκέλη {tower_type}"
-    msp.add_text(
-        title_text,
-        dxfattribs={
-            "height": square_side * 0.2,
-            "layer": "leg_labels",
-        },
-    ).set_pos((-square_side * 1.5, label_y_start + square_side * 0.5))
+    # Tower types in the order they appear in the CSV:
+    tower_types = df["Tower Type"].unique()
 
-    # ----------------------------------------------------------------------
-    # 8. Save DXF
-    # ----------------------------------------------------------------------
-    doc.saveas(dxf_out)
-    print(f"DXF saved to: {dxf_out}")
+    for tower in tower_types:
+        df_tower = df[df["Tower Type"] == tower]
+
+        # Create a new DXF document for each tower type
+        doc = ezdxf.new(setup=True)
+        draw_tower(doc, tower, df_tower)
+
+        # Sanitize filename a bit
+        safe_name = (
+            str(tower)
+            .replace("+", "plus")
+            .replace("/", "_")
+            .replace(" ", "")
+        )
+        out_path = out_dir / f"{safe_name}.dxf"
+        doc.saveas(out_path)
+        print(f"Saved {out_path}")
 
 
 if __name__ == "__main__":
-    # Example usage:
-    # Adjust these paths as needed.
-    csv_file = "diagrams.csv"        # path to your diagrams.csv
-    output_dxf = "G5+8_skeli.dxf"    # output DXF file
-    create_tower_skeleton_dxf(csv_file, "G5+8", output_dxf)
+    main()
