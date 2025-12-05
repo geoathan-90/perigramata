@@ -20,7 +20,7 @@ LAYER_BASE_VARIANTS = "BASE_VARIANTS"
 LAYER_OFFSET_VARIANTS = "OFFSET_VARIANTS"   # for / +0,70, / +0,50, / +whatever
 LAYER_CENTERLINE = "CENTERLINE"
 LAYER_ANNOTATIONS = "ANNOTATIONS"           # all text (labels + title)
-LAYER_ANGLED_LINES = "ANGLED_LINES"         # new: the two diagonal lines
+LAYER_ANGLED_LINES = "ANGLED_LINES"         # the two diagonal lines
 
 
 def normalize_base(leg_type: str) -> str:
@@ -74,8 +74,8 @@ def parse_offset_value(leg_type: str):
 
 def parse_distance(val):
     """
-    Parse 'distance on the ground' cell to float.
-    Handles integers or decimals with comma or dot.
+    Parse numeric fields (e.g. 'distance on the ground', 'square half-diagonal')
+    to float. Handles integers or decimals with comma or dot.
     """
     if pd.isna(val):
         return None
@@ -158,12 +158,15 @@ def ensure_layers(doc):
 def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
     """
     Draws:
-      - one horizontal line for each unique Leg Type (variant),
-        from X_MIN to X_MAX at its y position.
-      - labels (variant name) at both ends of each line (on ANNOTATIONS layer).
-      - a dashed vertical centerline.
-      - two angled lines based on 'distance on the ground'.
-      - a title with the tower type above the topmost line (on ANNOTATIONS layer).
+      - horizontal lines for each Leg Type
+      - labels at both ends
+      - dashed vertical centerline
+      - positive & negative angled lines based on 'distance on the ground'
+      - for each intersection of the negative angled line with a horizontal line:
+          * two vertical tick marks
+          * one small horizontal connector
+        all on the layer of that horizontal line
+      - title on top
     """
     ensure_layers(doc)
     msp = doc.modelspace()
@@ -177,7 +180,8 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
     y_max = max(all_y)
     y_min = min(all_y)
 
-    # Draw one line per variant
+    # ---------- Horizontal lines + text ----------
+
     for leg_type, y in y_variant_map.items():
         label = str(leg_type).strip()
 
@@ -202,7 +206,7 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
                 "layer": LAYER_ANNOTATIONS,
             },
         )
-        t1.dxf.insert = (left_x, y + TEXT_HEIGHT)  # NO set_pos!
+        t1.dxf.insert = (left_x, y + TEXT_HEIGHT)
 
         # Right label: at the right end of the line, slightly above, on ANNOTATIONS layer
         t2 = msp.add_text(
@@ -212,7 +216,7 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
                 "layer": LAYER_ANNOTATIONS,
             },
         )
-        t2.dxf.insert = (X_MAX, y + TEXT_HEIGHT)  # NO set_pos!
+        t2.dxf.insert = (X_MAX, y + TEXT_HEIGHT)
 
     # ---------- Angled lines based on "distance on the ground" ----------
 
@@ -223,8 +227,8 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
     y_low = y_variant_map[lowest_leg_type]
     y_high = y_variant_map[highest_leg_type]
 
-    # Get their corresponding 'distance on the ground' values
-    col_dist = "distance on the ground"  # column name as in your CSV
+    col_dist = "distance on the ground"        # column name for distances
+    col_sq_half = "square half-diagonal"       # column name for square half-diagonal
 
     # Lowest
     df_low = df_for_tower[df_for_tower["Leg Type"] == lowest_leg_type]
@@ -238,9 +242,9 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
     if not df_high.empty and col_dist in df_high.columns:
         x_high = parse_distance(df_high.iloc[0][col_dist])
 
-    if x_low is not None and x_high is not None:
+    # Draw angled lines & ticks only if we have both distances and non-zero dy
+    if x_low is not None and x_high is not None and y_high != y_low:
         # Positive side angled line: from lowest to highest
-        # Example you gave: (8998, -6700) to (7616, 4000)
         msp.add_line(
             (x_low, y_low),
             (x_high, y_high),
@@ -253,6 +257,63 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
             (-x_high, y_high),
             dxfattribs={"layer": LAYER_ANGLED_LINES},
         )
+
+        # ---------- Ticks at every intersection with negative angled line ----------
+
+        dx = x_high - x_low
+        dy = y_high - y_low
+
+        for leg_type, y in y_variant_map.items():
+            # Only consider lines between the lowest and highest
+            if not (min(y_low, y_high) <= y <= max(y_low, y_high)):
+                continue
+
+            # Intersection with positive angled line at this y
+            t = (y - y_low) / dy
+            x_pos = x_low + dx * t
+
+            # Mirrored negative x
+            x_center_neg = -x_pos
+
+            # Get this leg_type's square half-diagonal
+            df_leg = df_for_tower[df_for_tower["Leg Type"] == leg_type]
+            if df_leg.empty or col_sq_half not in df_leg.columns:
+                continue
+
+            half_diag = parse_distance(df_leg.iloc[0][col_sq_half])
+            if half_diag is None:
+                continue
+
+            # Layer for this variant = layer of its horizontal line
+            offset_value = parse_offset_value(leg_type)
+            layer_tick = LAYER_OFFSET_VARIANTS if offset_value is not None else LAYER_BASE_VARIANTS
+
+            # Tick positions
+            x1 = x_center_neg - half_diag
+            x2 = x_center_neg + half_diag
+            y_bottom = y - 100
+            y_top = y + 100
+
+            # Left vertical tick
+            msp.add_line(
+                (x1, y_bottom),
+                (x1, y_top),
+                dxfattribs={"layer": layer_tick},
+            )
+
+            # Right vertical tick
+            msp.add_line(
+                (x2, y_bottom),
+                (x2, y_top),
+                dxfattribs={"layer": layer_tick},
+            )
+
+            # Horizontal connector at the top
+            msp.add_line(
+                (x1, y_top),
+                (x2, y_top),
+                dxfattribs={"layer": layer_tick},
+            )
 
     # ---------- Centerline ----------
 
@@ -280,7 +341,6 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
             "layer": LAYER_ANNOTATIONS,
         },
     )
-    # Center-ish above the lines
     title_text.dxf.insert = (0, title_y)
 
 
