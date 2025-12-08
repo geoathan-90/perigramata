@@ -26,9 +26,9 @@ LAYER_ANGLED_LINES = "ANGLED_LINES"         # the two diagonal lines
 def normalize_base(leg_type: str) -> str:
     """
     From a full leg type string like:
-        '- 3 / +0,70', '+ 6 / +0,70', ' - 4 (-3,80)', 'N / +0,70'
+        '- 3 / +0,70', '+ 6 / +0,70', '-1,5 / +0,5', 'N / +0,70'
     get the canonical base string:
-        '-3', '6', '-4', 'N'
+        '-3', '6', '-1,5', 'N'
     """
     s = leg_type.strip()
     # Cut off anything after '/' or '(' -> keep only the base part
@@ -49,6 +49,7 @@ def parse_offset_value(leg_type: str):
         '-1 / +0,70'   -> 0.70
         'N / +0.50'    -> 0.50
         '+6/+0,70'     -> 0.70
+        '-1,5/+0,5'    -> 0.5
     Returns float or None if no offset is present.
     """
     if "/" not in leg_type:
@@ -96,7 +97,7 @@ def compute_y_maps(df_for_tower: pd.DataFrame):
     Pattern:
         Base:
           - base 'N' -> y = 0
-          - base integer k -> y = -1000 * k
+          - base numeric value k (possibly fractional, e.g. 1.5, -1,5) -> y = -1000 * k
         Offset:
           - if we have '/ +x' -> y = y_base - x * 1000
     """
@@ -112,15 +113,15 @@ def compute_y_maps(df_for_tower: pd.DataFrame):
         # Determine (and remember) the base y
         if base not in y_base_map:
             if base == "N":
-                y_base = 0
+                y_base = 0.0
             else:
-                # If the base is numeric, map k -> -1000 * k
+                # Base may be integer or fractional, with comma or dot
                 try:
-                    k = int(base)
+                    base_val = float(base.replace(",", "."))
                 except ValueError:
-                    # Fallback if something weird appears: treat as 0
-                    k = 0
-                y_base = -1000 * k
+                    # Fallback if something truly weird appears: stick it at 0
+                    base_val = 0.0
+                y_base = -1000.0 * base_val
             y_base_map[base] = y_base
             base_order.append(base)
         else:
@@ -129,15 +130,13 @@ def compute_y_maps(df_for_tower: pd.DataFrame):
         # Offset handling: / +x -> y = y_base - x * 1000
         offset = parse_offset_value(lt)
         if offset is not None:
-            y = y_base - round(offset * 1000)
+            y = y_base - offset * 1000.0
         else:
             y = y_base
 
         y_variant_map[lt] = y
 
-    if "N" not in y_base_map:
-        raise ValueError("Expected a base 'N' level in this tower, but didn't find one.")
-
+    # We no longer require that an 'N' row exists
     return base_order, y_base_map, y_variant_map
 
 
