@@ -242,6 +242,7 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
 
     # Draw angled lines & ticks only if we have both distances and non-zero dy
     if x_low is not None and x_high is not None and y_high != y_low:
+        
         # Compute direction of the angled line (low -> high)
         dx = x_high - x_low
         dy = y_high - y_low
@@ -266,10 +267,11 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
             dxfattribs={"layer": LAYER_ANGLED_LINES},
         )
 
-        # ---------- Ticks at every intersection with the angled lines ----------
+        BOX_HALF_WIDTH = 353.0   # horizontal ± distance from intersection
+        BOX_HEIGHT = 400.0       # vertical projection along Y
 
-        dx = x_high - x_low
-        dy = y_high - y_low
+
+        # ---------- Ticks at every intersection with the angled lines ----------
 
         for leg_type, y in y_variant_map.items():
             # Only consider lines between the lowest and highest
@@ -350,6 +352,56 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
                 (x2_pos, y_top),
                 dxfattribs={"layer": layer_tick},
             )
+
+            # ---------- Angled box on negative side of uppermost horizontal line ----------
+
+        # We use the uppermost horizontal line (highest_leg_type, y_high)
+        # Intersection of the positive angled line with that horizontal:
+        if min(y_low, y_high) <= y_high <= max(y_low, y_high):
+            t_box = (y_high - y_low) / dy
+            x_pos_box = x_low + dx * t_box       # positive side intersection
+            x_neg_center = -x_pos_box           # mirrored negative side intersection
+
+            # Step 353 units horizontally left/right from that intersection
+            x_left = x_neg_center - BOX_HALF_WIDTH
+            x_right = x_neg_center + BOX_HALF_WIDTH
+            y_base_box = y_high + 100
+
+            # We want to go up 400 units along the slope of the NEGATIVE angled line.
+            # Direction vector for negative side is (-dx, dy).
+            dy_box = BOX_HEIGHT
+            t_height = dy_box / dy
+            delta_x_neg = -dx * t_height        # horizontal shift along that slope
+            y_top_box = y_base_box + dy_box
+
+            # Top points of the two slanted lines
+            x_left_top = x_left + delta_x_neg
+            x_right_top = x_right + delta_x_neg
+
+            # All these box lines live in the BASE_VARIANTS layer
+            box_layer = LAYER_BASE_VARIANTS
+
+            # Left slanted side of the box
+            msp.add_line(
+                (x_left, y_base_box),
+                (x_left_top, y_top_box),
+                dxfattribs={"layer": box_layer},
+            )
+
+            # Right slanted side of the box
+            msp.add_line(
+                (x_right, y_base_box),
+                (x_right_top, y_top_box),
+                dxfattribs={"layer": box_layer},
+            )
+
+            # Horizontal top of the box
+            msp.add_line(
+                (x_left_top, y_top_box),
+                (x_right_top, y_top_box),
+                dxfattribs={"layer": box_layer},
+            )
+
 
     # ---------- Centerline ----------
 
