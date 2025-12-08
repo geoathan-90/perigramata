@@ -136,7 +136,6 @@ def compute_y_maps(df_for_tower: pd.DataFrame):
 
         y_variant_map[lt] = y
 
-    # We no longer require that an 'N' row exists
     return base_order, y_base_map, y_variant_map
 
 
@@ -161,7 +160,7 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
       - labels at both ends
       - dashed vertical centerline
       - positive & negative angled lines based on 'distance on the ground'
-      - for each intersection of the negative angled line with a horizontal line:
+      - for each intersection of the negative/positive angled lines with a horizontal line:
           * two vertical tick marks
           * one small horizontal connector
         all on the layer of that horizontal line
@@ -243,21 +242,31 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
 
     # Draw angled lines & ticks only if we have both distances and non-zero dy
     if x_low is not None and x_high is not None and y_high != y_low:
-        # Positive side angled line: from lowest to highest
+        # Compute direction of the angled line (low -> high)
+        dx = x_high - x_low
+        dy = y_high - y_low
+
+        # Extend the line 1200 units upward in Y along its current slope
+        extra_y = 1200.0
+        t_ext = extra_y / dy          # how much further along the line we go
+        x_high_ext = x_high + dx * t_ext
+        y_high_ext = y_high + extra_y
+
+        # Positive side angled line: from lowest to *extended* highest
         msp.add_line(
             (x_low, y_low),
-            (x_high, y_high),
+            (x_high_ext, y_high_ext),
             dxfattribs={"layer": LAYER_ANGLED_LINES},
         )
 
         # Negative side: mirrored around the centerline (x -> -x)
         msp.add_line(
             (-x_low, y_low),
-            (-x_high, y_high),
+            (-x_high_ext, y_high_ext),
             dxfattribs={"layer": LAYER_ANGLED_LINES},
         )
 
-        # ---------- Ticks at every intersection with negative angled line ----------
+        # ---------- Ticks at every intersection with the angled lines ----------
 
         dx = x_high - x_low
         dy = y_high - y_low
@@ -287,30 +296,58 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
             offset_value = parse_offset_value(leg_type)
             layer_tick = LAYER_OFFSET_VARIANTS if offset_value is not None else LAYER_BASE_VARIANTS
 
-            # Tick positions
-            x1 = x_center_neg - half_diag
-            x2 = x_center_neg + half_diag
+            # Common vertical positions for ticks
             y_bottom = y - 100
             y_top = y + 100
 
-            # Left vertical tick
+            # ===== Negative side goalpost (existing behavior) =====
+            x1_neg = x_center_neg - half_diag
+            x2_neg = x_center_neg + half_diag
+
+            # Left vertical tick (negative side)
             msp.add_line(
-                (x1, y_bottom),
-                (x1, y_top),
+                (x1_neg, y_bottom),
+                (x1_neg, y_top),
                 dxfattribs={"layer": layer_tick},
             )
 
-            # Right vertical tick
+            # Right vertical tick (negative side)
             msp.add_line(
-                (x2, y_bottom),
-                (x2, y_top),
+                (x2_neg, y_bottom),
+                (x2_neg, y_top),
                 dxfattribs={"layer": layer_tick},
             )
 
-            # Horizontal connector at the top
+            # Horizontal connector at the top (negative side)
             msp.add_line(
-                (x1, y_top),
-                (x2, y_top),
+                (x1_neg, y_top),
+                (x2_neg, y_top),
+                dxfattribs={"layer": layer_tick},
+            )
+
+            # ===== Positive side goalpost (NEW) =====
+            x_center_pos = x_pos
+            x1_pos = x_center_pos - half_diag
+            x2_pos = x_center_pos + half_diag
+
+            # Left vertical tick (positive side)
+            msp.add_line(
+                (x1_pos, y_bottom),
+                (x1_pos, y_top),
+                dxfattribs={"layer": layer_tick},
+            )
+
+            # Right vertical tick (positive side)
+            msp.add_line(
+                (x2_pos, y_bottom),
+                (x2_pos, y_top),
+                dxfattribs={"layer": layer_tick},
+            )
+
+            # Horizontal connector at the top (positive side)
+            msp.add_line(
+                (x1_pos, y_top),
+                (x2_pos, y_top),
                 dxfattribs={"layer": layer_tick},
             )
 
