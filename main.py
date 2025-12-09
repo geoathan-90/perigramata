@@ -164,6 +164,8 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
           * two vertical tick marks
           * one small horizontal connector
         all on the layer of that horizontal line
+      - for every horizontal line in BASE_VARIANTS:
+          * an 'angled box' on the negative side, following the angled line slope
       - title on top
     """
     ensure_layers(doc)
@@ -240,9 +242,9 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
     if not df_high.empty and col_dist in df_high.columns:
         x_high = parse_distance(df_high.iloc[0][col_dist])
 
-    # Draw angled lines & ticks only if we have both distances and non-zero dy
+    # Draw angled lines, ticks, and boxes only if we have both distances and non-zero dy
     if x_low is not None and x_high is not None and y_high != y_low:
-        
+
         # Compute direction of the angled line (low -> high)
         dx = x_high - x_low
         dy = y_high - y_low
@@ -269,7 +271,6 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
 
         BOX_HALF_WIDTH = 353.0   # horizontal ± distance from intersection
         BOX_HEIGHT = 400.0       # vertical projection along Y
-
 
         # ---------- Ticks at every intersection with the angled lines ----------
 
@@ -302,105 +303,140 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
             y_bottom = y - 100
             y_top = y + 100
 
-            # ===== Negative side goalpost (existing behavior) =====
+            # ===== Negative side goalpost =====
             x1_neg = x_center_neg - half_diag
             x2_neg = x_center_neg + half_diag
 
-            # Left vertical tick (negative side)
             msp.add_line(
                 (x1_neg, y_bottom),
                 (x1_neg, y_top),
                 dxfattribs={"layer": layer_tick},
             )
-
-            # Right vertical tick (negative side)
             msp.add_line(
                 (x2_neg, y_bottom),
                 (x2_neg, y_top),
                 dxfattribs={"layer": layer_tick},
             )
-
-            # Horizontal connector at the top (negative side)
             msp.add_line(
                 (x1_neg, y_top),
                 (x2_neg, y_top),
                 dxfattribs={"layer": layer_tick},
             )
 
-            # ===== Positive side goalpost (NEW) =====
+            # ===== Positive side goalpost =====
             x_center_pos = x_pos
             x1_pos = x_center_pos - half_diag
             x2_pos = x_center_pos + half_diag
 
-            # Left vertical tick (positive side)
             msp.add_line(
                 (x1_pos, y_bottom),
                 (x1_pos, y_top),
                 dxfattribs={"layer": layer_tick},
             )
-
-            # Right vertical tick (positive side)
             msp.add_line(
                 (x2_pos, y_bottom),
                 (x2_pos, y_top),
                 dxfattribs={"layer": layer_tick},
             )
-
-            # Horizontal connector at the top (positive side)
             msp.add_line(
                 (x1_pos, y_top),
                 (x2_pos, y_top),
                 dxfattribs={"layer": layer_tick},
             )
 
-            # ---------- Angled box on negative side of uppermost horizontal line ----------
+        # ---------- Angled box on every BASE_VARIANTS horizontal line ----------
 
-        # We use the uppermost horizontal line (highest_leg_type, y_high)
-        # Intersection of the positive angled line with that horizontal:
-        if min(y_low, y_high) <= y_high <= max(y_low, y_high):
-            t_box = (y_high - y_low) / dy
-            x_pos_box = x_low + dx * t_box       # positive side intersection
-            x_neg_center = -x_pos_box           # mirrored negative side intersection
+    # ---------- Angled box on every BASE_VARIANTS horizontal line ----------
 
-            # Step 353 units horizontally left/right from that intersection
-            x_left = x_neg_center - BOX_HALF_WIDTH
-            x_right = x_neg_center + BOX_HALF_WIDTH
-            y_base_box = y_high + 100
+    for leg_type, y in y_variant_map.items():
+        # Only consider base variants (no /+offset)
+        if parse_offset_value(leg_type) is not None:
+            continue
 
-            # We want to go up 400 units along the slope of the NEGATIVE angled line.
-            # Direction vector for negative side is (-dx, dy).
-            dy_box = BOX_HEIGHT
-            t_height = dy_box / dy
-            delta_x_neg = -dx * t_height        # horizontal shift along that slope
-            y_top_box = y_base_box + dy_box
+        # Only if the angled line actually crosses this y
+        if not (min(y_low, y_high) <= y <= max(y_low, y_high)):
+            continue
 
-            # Top points of the two slanted lines
-            x_left_top = x_left + delta_x_neg
-            x_right_top = x_right + delta_x_neg
+        # Intersection of the positive angled line with this horizontal
+        t_box = (y - y_low) / dy
+        x_pos_box = x_low + dx * t_box   # positive side intersection
 
-            # All these box lines live in the BASE_VARIANTS layer
-            box_layer = LAYER_BASE_VARIANTS
+        # Common vertical geometry for the box
+        y_base_box = y + 100.0           # start 100 units above the horizontal line
+        dy_box = BOX_HEIGHT              # 400 units vertical projection
+        t_height = dy_box / dy
+        y_top_box = y_base_box + dy_box
 
-            # Left slanted side of the box
-            msp.add_line(
-                (x_left, y_base_box),
-                (x_left_top, y_top_box),
-                dxfattribs={"layer": box_layer},
-            )
+        # All box lines live in BASE_VARIANTS
+        box_layer = LAYER_BASE_VARIANTS
 
-            # Right slanted side of the box
-            msp.add_line(
-                (x_right, y_base_box),
-                (x_right_top, y_top_box),
-                dxfattribs={"layer": box_layer},
-            )
+        # ===== NEGATIVE SIDE BOX =====
+        x_neg_center = -x_pos_box        # mirrored negative side intersection
 
-            # Horizontal top of the box
-            msp.add_line(
-                (x_left_top, y_top_box),
-                (x_right_top, y_top_box),
-                dxfattribs={"layer": box_layer},
-            )
+        # Step BOX_HALF_WIDTH horizontally left/right from that intersection
+        x_left_neg = x_neg_center - BOX_HALF_WIDTH
+        x_right_neg = x_neg_center + BOX_HALF_WIDTH
+
+        # Go up along the slope of the NEGATIVE angled line: direction (-dx, dy)
+        delta_x_neg = -dx * t_height     # horizontal shift along that slope
+
+        # Top points of the two slanted lines (negative side)
+        x_left_neg_top = x_left_neg + delta_x_neg
+        x_right_neg_top = x_right_neg + delta_x_neg
+
+        # Left slanted side (negative)
+        msp.add_line(
+            (x_left_neg, y_base_box),
+            (x_left_neg_top, y_top_box),
+            dxfattribs={"layer": box_layer},
+        )
+
+        # Right slanted side (negative)
+        msp.add_line(
+            (x_right_neg, y_base_box),
+            (x_right_neg_top, y_top_box),
+            dxfattribs={"layer": box_layer},
+        )
+
+        # Horizontal top (negative)
+        msp.add_line(
+            (x_left_neg_top, y_top_box),
+            (x_right_neg_top, y_top_box),
+            dxfattribs={"layer": box_layer},
+        )
+
+        # ===== POSITIVE SIDE BOX (MIRRORED) =====
+        x_pos_center = x_pos_box        # positive side intersection
+
+        x_left_pos = x_pos_center - BOX_HALF_WIDTH
+        x_right_pos = x_pos_center + BOX_HALF_WIDTH
+
+        # Go up along the slope of the POSITIVE angled line: direction (dx, dy)
+        delta_x_pos = dx * t_height
+
+        x_left_pos_top = x_left_pos + delta_x_pos
+        x_right_pos_top = x_right_pos + delta_x_pos
+
+        # Left slanted side (positive)
+        msp.add_line(
+            (x_left_pos, y_base_box),
+            (x_left_pos_top, y_top_box),
+            dxfattribs={"layer": box_layer},
+        )
+
+        # Right slanted side (positive)
+        msp.add_line(
+            (x_right_pos, y_base_box),
+            (x_right_pos_top, y_top_box),
+            dxfattribs={"layer": box_layer},
+        )
+
+        # Horizontal top (positive)
+        msp.add_line(
+            (x_left_pos_top, y_top_box),
+            (x_right_pos_top, y_top_box),
+            dxfattribs={"layer": box_layer},
+        )
 
 
     # ---------- Centerline ----------
