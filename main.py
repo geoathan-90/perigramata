@@ -229,6 +229,7 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
 
     col_dist = "distance on the ground"        # column name for distances
     col_sq_half = "square half-diagonal"       # column name for square half-diagonal
+    col_center_block = "Distance to Center blocketo"
 
     # Lowest
     df_low = df_for_tower[df_for_tower["Leg Type"] == lowest_leg_type]
@@ -295,6 +296,21 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
             if half_diag is None:
                 continue
 
+            # ---- NEW: compute Diff from 'Distance to Center blocketo' ----
+            # Diff = |DistanceToCenterBlocketo - distance_on_the_ground|
+            dist_ground = None
+            dist_center_block = None
+
+            if col_dist in df_leg.columns:
+                dist_ground = parse_distance(df_leg.iloc[0][col_dist])
+            if col_center_block in df_leg.columns:
+                dist_center_block = parse_distance(df_leg.iloc[0][col_center_block])
+
+            if dist_ground is not None and dist_center_block is not None:
+                diff = abs(dist_center_block - dist_ground)
+            else:
+                diff = 0.0  # fallback if data missing
+
             # Layer for this variant = layer of its horizontal line
             offset_value = parse_offset_value(leg_type)
             layer_tick = LAYER_OFFSET_VARIANTS if offset_value is not None else LAYER_BASE_VARIANTS
@@ -303,48 +319,58 @@ def draw_tower(doc, tower_name: str, df_for_tower: pd.DataFrame):
             y_bottom = y - 100
             y_top = y + 100
 
-            # ===== Negative side goalpost =====
-            x1_neg = x_center_neg - half_diag
-            x2_neg = x_center_neg + half_diag
+            # ===== Negative side goalpost (with Diff, moved "outwards") =====
+            x1_neg = x_center_neg - half_diag - diff
+            x2_neg = x_center_neg + half_diag - diff
 
+            # Left vertical tick (negative side)
             msp.add_line(
                 (x1_neg, y_bottom),
                 (x1_neg, y_top),
                 dxfattribs={"layer": layer_tick},
             )
+
+            # Right vertical tick (negative side)
             msp.add_line(
                 (x2_neg, y_bottom),
                 (x2_neg, y_top),
                 dxfattribs={"layer": layer_tick},
             )
+
+            # Horizontal connector at the top (negative side)
             msp.add_line(
                 (x1_neg, y_top),
                 (x2_neg, y_top),
                 dxfattribs={"layer": layer_tick},
             )
 
-            # ===== Positive side goalpost =====
+            # ===== Positive side goalpost (with Diff, signs reversed) =====
             x_center_pos = x_pos
-            x1_pos = x_center_pos - half_diag
-            x2_pos = x_center_pos + half_diag
 
+            x1_pos = x_center_pos - half_diag + diff
+            x2_pos = x_center_pos + half_diag + diff
+
+            # Left vertical tick (positive side)
             msp.add_line(
                 (x1_pos, y_bottom),
                 (x1_pos, y_top),
                 dxfattribs={"layer": layer_tick},
             )
+
+            # Right vertical tick (positive side)
             msp.add_line(
                 (x2_pos, y_bottom),
                 (x2_pos, y_top),
                 dxfattribs={"layer": layer_tick},
             )
+
+            # Horizontal connector at the top (positive side)
             msp.add_line(
                 (x1_pos, y_top),
                 (x2_pos, y_top),
                 dxfattribs={"layer": layer_tick},
             )
 
-        # ---------- Angled box on every BASE_VARIANTS horizontal line ----------
 
     # ---------- Angled box on every BASE_VARIANTS horizontal line ----------
 
